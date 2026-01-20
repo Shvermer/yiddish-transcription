@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Yiddish Transcription Search</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+        input { padding: 10px; width: 100%; margin-bottom: 10px; }
+        button { padding: 10px; width: 100%; }
+        #result { margin-top: 20px; font-size: 18px; }
+    </style>
+</head>
+<body>
+    <h1>Yiddish Transcription Search</h1>
+    <input type="text" id="searchInput" placeholder="Enter a word...">
+    <button onclick="searchWord()">Search</button>
+    <div id="result"></div>
+
+    <script>
+        let data = []; // Will hold the CSV data
+
+        // Function to load and parse CSV
+        function loadCSV() {
+            fetch('data.csv')
+                .then(response => response.text())
+                .then(csvText => {
+                    const rows = csvText.split('\n').map(row => row.trim());
+                    data = rows.slice(1).map(row => {
+                        const [word, transcription] = row.split(',');
+                        return { word: word?.toLowerCase(), transcription };
+                    });
+                })
+                .catch(error => console.error('Error loading CSV:', error));
+        }
+
+        // Function to search for the word
+        function searchWord() {
+            const input = document.getElementById('searchInput').value.toLowerCase();
+            const resultDiv = document.getElementById('result');
+            const match = data.find(item => item.word === input);
+            resultDiv.textContent = match ? `Transcription: ${match.transcription}` : 'No match found.';
+        }
+
+        // Load CSV when page loads
+        window.onload = loadCSV;
+    </script>
+</body>
+</html>
