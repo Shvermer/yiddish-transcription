@@ -34,7 +34,7 @@
         .yiddish-output {
             direction: rtl;
             text-align: right;
-            font-family: "Taamey Ashkenaz", "David", Arial, sans-serif;
+            font-family: "Taamey Ashkenaz", "Noto Sans Hebrew", Arial, sans-serif;
             font-size: 1.25em;
             background: #fff8e1;
         }
@@ -65,15 +65,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Taamey+Ashkenaz&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>טעקסט → ייִדיש טראַנסקריפּציע</h1>
+    <h1>טעקסט → אידיש טראַנסקריפּציע</h1>
 
     <div class="container">
-        <label for="inputText">אַרײַנשרײַבט דעם טעקסט (אָדער פּייסט אַרײַן):</label>
+        <label for="inputText">שרייבט אריין דעם טעקסט:</label>
         <textarea id="inputText" placeholder="כתבו או הדביקו כאן..."></textarea>
 
-        <button onclick="convertText()">קאָנווערטירן / פֿאַרשטיין</button>
+        <button onclick="convertText()">טראסקריבירן</button>
 
-        <label for="outputText">רעזולטאַט (קען קאָפּירן):</label>
+        <label for="outputText">רעזולטאַט:</label>
         <textarea id="outputText" class="yiddish-output" readonly></textarea>
 
         <div style="text-align: center;">
