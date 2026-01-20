@@ -18,32 +18,59 @@
     <div id="result"></div>
 
     <script>
-        let data = []; // Will hold the CSV data
+    let data = []; // Array of {word, transcription}
 
-        // Function to load and parse CSV
-        function loadCSV() {
-            fetch('data.csv')
-                .then(response => response.text())
-                .then(csvText => {
-                    const rows = csvText.split('\n').map(row => row.trim());
-                    data = rows.slice(1).map(row => {
-                        const [word, transcription] = row.split(',');
-                        return { word: word?.toLowerCase(), transcription };
-                    });
-                })
-                .catch(error => console.error('Error loading CSV:', error));
+    function loadCSV() {
+        fetch('data.csv')
+            .then(response => {
+                if (!response.ok) throw new Error('CSV file not found');
+                return response.text();
+            })
+            .then(csvText => {
+                const rows = csvText.split('\n')
+                    .map(row => row.trim())
+                    .filter(row => row.length > 0 && !row.startsWith('#')); // skip comments/empty
+
+                data = rows.slice(1).map(row => {  // skip header
+                    const parts = row.split(',');
+                    if (parts.length < 2) return null;
+                    
+                    const word = parts[0].trim().toLowerCase();
+                    // Join remaining parts in case transcription has commas
+                    const transcription = parts.slice(1).join(',').trim();
+                    
+                    return { word, transcription };
+                }).filter(item => item !== null && item.word !== '');
+
+                console.log("Loaded " + data.length + " entries:");
+                console.table(data); // nice table in console
+            })
+            .catch(error => {
+                console.error('Error loading CSV:', error);
+                document.getElementById('result').textContent = 'Error: Could not load data file.';
+            });
+    }
+
+    function searchWord() {
+        const inputElem = document.getElementById('searchInput');
+        const resultDiv = document.getElementById('result');
+        
+        let input = inputElem.value.trim().toLowerCase();
+        
+        if (!input) {
+            resultDiv.textContent = 'נאָך אַ וואָרט אַרײַנשרײַבן';
+            return;
         }
 
-        // Function to search for the word
-        function searchWord() {
-            const input = document.getElementById('searchInput').value.toLowerCase();
-            const resultDiv = document.getElementById('result');
-            const match = data.find(item => item.word === input);
-            resultDiv.textContent = match ? `Transcription: ${match.transcription}` : 'No match found.';
-        }
+        const match = data.find(item => item.word === input);
+        
+        resultDiv.innerHTML = match 
+            ? `Transcription: <strong dir="rtl">${match.transcription}</strong>`
+            : `נישט געפֿונען: "${input}"`;
+    }
 
-        // Load CSV when page loads
-        window.onload = loadCSV;
-    </script>
+    // Load when page opens
+    window.onload = loadCSV;
+</script>
 </body>
 </html>
