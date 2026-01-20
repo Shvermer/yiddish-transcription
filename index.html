@@ -1,76 +1,170 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="yi" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Yiddish Transcription Search</title>
+    <title>Yiddish Transcription Converter</title>
     <style>
-        body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
-        input { padding: 10px; width: 100%; margin-bottom: 10px; }
-        button { padding: 10px; width: 100%; }
-        #result { margin-top: 20px; font-size: 18px; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 900px;
+            margin: 30px auto;
+            padding: 20px;
+            background: #f9f9f9;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        textarea {
+            width: 100%;
+            height: 180px;
+            padding: 12px;
+            font-size: 17px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            resize: vertical;
+            font-family: inherit;
+        }
+        .yiddish-output {
+            direction: rtl;
+            text-align: right;
+            font-family: "Taamey Ashkenaz", "David", Arial, sans-serif;
+            font-size: 1.25em;
+            background: #fff8e1;
+        }
+        button {
+            padding: 12px 24px;
+            font-size: 18px;
+            background: #2c7a7b;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #1e5c5d;
+        }
+        #copyBtn {
+            background: #4CAF50;
+        }
+        #copyBtn:hover {
+            background: #45a049;
+        }
+        #status {
+            text-align: center;
+            font-weight: bold;
+            min-height: 24px;
+        }
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Taamey+Ashkenaz&display=swap" rel="stylesheet">
 </head>
 <body>
-    <h1>Yiddish Transcription Search</h1>
-    <input type="text" id="searchInput" placeholder="Enter a word...">
-    <button onclick="searchWord()">Search</button>
-    <div id="result"></div>
+    <h1>טעקסט → ייִדיש טראַנסקריפּציע</h1>
+
+    <div class="container">
+        <label for="inputText">אַרײַנשרײַבט דעם טעקסט (אָדער פּייסט אַרײַן):</label>
+        <textarea id="inputText" placeholder="כתבו או הדביקו כאן..."></textarea>
+
+        <button onclick="convertText()">קאָנווערטירן / פֿאַרשטיין</button>
+
+        <label for="outputText">רעזולטאַט (קען קאָפּירן):</label>
+        <textarea id="outputText" class="yiddish-output" readonly></textarea>
+
+        <div style="text-align: center;">
+            <button id="copyBtn" onclick="copyToClipboard()">קאָפּירן צום קליפּבאָרד</button>
+        </div>
+
+        <div id="status"></div>
+    </div>
 
     <script>
-    let data = []; // Array of {word, transcription}
+        let dictionary = new Map(); // word (lowercase) → transcription
 
-    function loadCSV() {
-        fetch('data.csv')
-            .then(response => {
-                if (!response.ok) throw new Error('CSV file not found');
-                return response.text();
-            })
-            .then(csvText => {
-                const rows = csvText.split('\n')
-                    .map(row => row.trim())
-                    .filter(row => row.length > 0 && !row.startsWith('#')); // skip comments/empty
+        function loadCSV() {
+            fetch('data.csv')
+                .then(response => {
+                    if (!response.ok) throw new Error('CSV not found');
+                    return response.text();
+                })
+                .then(csvText => {
+                    const rows = csvText.split('\n')
+                        .map(r => r.trim())
+                        .filter(r => r && !r.startsWith('#'));
 
-                data = rows.slice(1).map(row => {  // skip header
-                    const parts = row.split(',');
-                    if (parts.length < 2) return null;
-                    
-                    const word = parts[0].trim().toLowerCase();
-                    // Join remaining parts in case transcription has commas
-                    const transcription = parts.slice(1).join(',').trim();
-                    
-                    return { word, transcription };
-                }).filter(item => item !== null && item.word !== '');
+                    rows.slice(1).forEach(row => {
+                        const parts = row.split(',');
+                        if (parts.length < 2) return;
+                        const word = parts[0].trim().toLowerCase();
+                        const transcription = parts.slice(1).join(',').trim();
+                        if (word) dictionary.set(word, transcription);
+                    });
 
-                console.log("Loaded " + data.length + " entries:");
-                console.table(data); // nice table in console
-            })
-            .catch(error => {
-                console.error('Error loading CSV:', error);
-                document.getElementById('result').textContent = 'Error: Could not load data file.';
-            });
-    }
-
-    function searchWord() {
-        const inputElem = document.getElementById('searchInput');
-        const resultDiv = document.getElementById('result');
-        
-        let input = inputElem.value.trim().toLowerCase();
-        
-        if (!input) {
-            resultDiv.textContent = 'נאָך אַ וואָרט אַרײַנשרײַבן';
-            return;
+                    document.getElementById('status').textContent = 
+                        `געלאָדנט ${dictionary.size} ווערטער`;
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('status').textContent = 'פֿעלער: קען נישט לאָדן data.csv';
+                });
         }
 
-        const match = data.find(item => item.word === input);
-        
-        resultDiv.innerHTML = match 
-            ? `Transcription: <strong dir="rtl">${match.transcription}</strong>`
-            : `נישט געפֿונען: "${input}"`;
-    }
+        function convertText() {
+            const input = document.getElementById('inputText').value;
+            const outputArea = document.getElementById('outputText');
+            const status = document.getElementById('status');
 
-    // Load when page opens
-    window.onload = loadCSV;
-</script>
+            if (!input.trim()) {
+                status.textContent = 'שרײַב עפּעס אַרײַן';
+                outputArea.value = '';
+                return;
+            }
+
+            // Split on any whitespace, comma, dash, period, etc. → keep separators
+            const tokens = input.split(/([ ,.;:!?()\-–—"'`])/);
+
+            const result = tokens.map(token => {
+                // If it's just a separator → keep as is
+                if (/^[ ,.;:!?()\-–—"'`]+$/.test(token)) {
+                    return token;
+                }
+                // Clean word for lookup
+                const clean = token.trim().toLowerCase();
+                // If empty after trim → keep original
+                if (!clean) return token;
+                
+                return dictionary.get(clean) || token;
+            }).join('');
+
+            outputArea.value = result;
+            status.textContent = 'געענדיקט! קען קאָפּירן.';
+        }
+
+        function copyToClipboard() {
+            const output = document.getElementById('outputText');
+            if (!output.value) return;
+
+            output.select();
+            output.setSelectionRange(0, 99999); // mobile
+            navigator.clipboard.writeText(output.value)
+                .then(() => {
+                    const status = document.getElementById('status');
+                    status.textContent = 'קאָפּירט!';
+                    setTimeout(() => { status.textContent = ''; }, 2000);
+                })
+                .catch(err => {
+                    console.error('Copy failed', err);
+                    alert('קאָפּירן נישט געקלאָגט. מאַכט סעלעקט און קאָפּירט מיט Ctrl+C');
+                });
+        }
+
+        // Load dictionary on page load
+        window.onload = loadCSV;
+    </script>
 </body>
 </html>
