@@ -1,8 +1,10 @@
-let dictionary = new Map();
-let titles = new Set();
+let dictionary = new Map(); // lowercase key → transcription
+let titles = new Set();     // lowercase titles to remove for main name lookup
+let letters = new Map();    // letter → Yiddish (for acronyms)
 
 async function loadData() {
     try {
+        // Load data.csv
         const dataRes = await fetch('data.csv');
         if (!dataRes.ok) throw new Error('data.csv missing');
         const dataText = await dataRes.text();
@@ -15,6 +17,7 @@ async function loadData() {
             if (key) dictionary.set(key, val);
         });
 
+        // Load titles.csv
         const titlesRes = await fetch('titles.csv');
         if (!titlesRes.ok) throw new Error('titles.csv missing');
         const titlesText = await titlesRes.text();
@@ -24,39 +27,25 @@ async function loadData() {
             if (t) titles.add(t);
         });
 
+        // Load letters.csv (new)
+        const lettersRes = await fetch('letters.csv');
+        if (!lettersRes.ok) throw new Error('letters.csv missing');
+        const lettersText = await lettersRes.text();
+        const lRows = lettersText.split('\n').map(r => r.trim()).filter(r => r && !r.startsWith('#'));
+        lRows.slice(1).forEach(row => {
+            const parts = row.split(',');
+            if (parts.length < 2) return;
+            const letter = parts[0].trim().toLowerCase();
+            const val = parts[1].trim();
+            if (letter) letters.set(letter, val);
+        });
+
         document.getElementById('status').textContent = 
-            `געלאָדנט ${dictionary.size} ווערטער און ${titles.size} טיטלען`;
+            `געלאָדנט דאטע מיט הצלחה`;
     } catch (err) {
         console.error(err);
-        document.getElementById('status').textContent = 'פעלער: דורכגעפאַלן צו לאָדענען די דאַטע';
+        document.getElementById('status').textContent = 'פעלער ביים לאָדענען די דאַטע';
     }
-}
-// Helper: split a sequence into separate name candidates
-function splitIntoNameCandidates(groupTokens) {
-    const candidates = [];
-    let current = [];
-
-    groupTokens.forEach((g, i) => {
-        current.push(g);
-
-        const nextToken = groupTokens[i + 1];
-        const isLast = i === groupTokens.length - 1;
-
-        // Strong separators that likely end a name
-        const textSoFar = current.map(t => t.core).join(' ').toLowerCase();
-        const hasStrongSep = textSoFar.includes(', ') || textSoFar.includes('; ') || 
-                             textSoFar.endsWith(' and ') || textSoFar.endsWith(' or ');
-
-        if ((hasStrongSep && !isLast) || isLast) {
-            if (isLast || hasStrongSep) {
-                candidates.push([...current]);
-                current = [];
-            }
-        }
-    });
-
-    if (current.length > 0) candidates.push(current);
-    return candidates;
 }
 
 function convertText() {
@@ -77,11 +66,7 @@ function convertText() {
     tokens.forEach(token => {
         if (/^\s+$/.test(token)) {
             if (currentGroup.length > 0) {
-                // Process the group with splitting
-                const nameCandidates = splitIntoNameCandidates(currentGroup);
-                nameCandidates.forEach(candidate => {
-                    processNameGroup(candidate, result);
-                });
+                processNonYiddishGroup(currentGroup, result);
                 currentGroup = [];
             }
             result.push(token);
@@ -98,18 +83,16 @@ function convertText() {
         }
 
         const cleanCore = core.toLowerCase();
-        const isHebrew = /^[\u0590-\u05FF\uFB1D-\uFB4F]+$/.test(cleanCore);
+        const isYiddishHebrew = /^[\u0590-\u05FF\uFB1D-\uFB4F]+$/.test(cleanCore);
 
-        if (isHebrew) {
+        if (isYiddishHebrew) {
             if (currentGroup.length > 0) {
-                const nameCandidates = splitIntoNameCandidates(currentGroup);
-                nameCandidates.forEach(c => processNameGroup(c, result));
+                processNonYiddishGroup(currentGroup, result);
                 currentGroup = [];
             }
             result.push(token);
         } else {
             currentGroup.push({
-                original: token,
                 punctBefore,
                 punctAfter,
                 core,
@@ -119,54 +102,133 @@ function convertText() {
     });
 
     if (currentGroup.length > 0) {
-        const nameCandidates = splitIntoNameCandidates(currentGroup);
-        nameCandidates.forEach(c => processNameGroup(c, result));
+        processNonYiddishGroup(currentGroup, result);
     }
 
     outputArea.value = result.join('');
     status.textContent = 'געענדיגט!';
 }
 
-function processNameGroup(group, result) {
-    if (group.length === 0) return;
+function processNonYiddishGroup(group, result) {
+    const groupText = group.map(g => g.core).join(' ');
 
-    const fullClean = group.map(g => g.cleanCore).join(' ');
+    // Step 2: Use compromise.js for NER (person names)
+    const doc = nlp(groupText);
+    const people = doc.people().out('array'); // e.g. ['Mr. Smith', 'Dr. Jones']
 
-    if (dictionary.has(fullClean)) {
-        const trans = dictionary.get(fullClean);
-        const firstP = group[0].punctBefore;
-        const lastP  = group[group.length-1].punctAfter;
-        result.push(firstP + trans + lastP);
-        return;
-    }
+    // Map extracted names back to positions (approximate via indexOf)
+    let remainingText = groupText;
+    let processed = [];
 
-    const nameParts = [];
-    const titleParts = [];
+    people.forEach(person => {
+        const pos = remainingText.indexOf(person);
+        if (pos === -1) return;
 
-    group.forEach(g => {
-        if (titles.has(g.cleanCore)) {
-            const titleTrans = dictionary.get(g.cleanCore) || g.core;
-            titleParts.push(g.punctBefore + titleTrans + g.punctAfter);
-        } else {
-            nameParts.push(g);
+        // Extract corresponding group slice (simplified - assume sequential)
+        const personWords = person.split(' ');
+        const personGroup = group.splice(0, personWords.length); // rough slice
+        processed.push(transcribeEntry(personGroup)); // full plan on this sub-group
+
+        remainingText = remainingText.slice(pos + person.length);
+    });
+
+    // Step 3: Remaining non-name parts - split on strong separators
+    const remainingCandidates = splitIntoCandidates(group); // remaining group after NER
+
+    remainingCandidates.forEach(candidate => {
+        processed.push(transcribeEntry(candidate));
+    });
+
+    result.push(processed.join(''));
+}
+
+function splitIntoCandidates(group) {
+    // Step 3: Split on ., , (comma+space), ;, and, or
+    const candidates = [];
+    let current = [];
+
+    group.forEach((g, i) => {
+        current.push(g);
+        const isLast = i === group.length - 1;
+        const punct = g.punctAfter.toLowerCase();
+
+        if ((punct.includes(',') || punct.includes(';') || g.core.toLowerCase() === 'and' || g.core.toLowerCase() === 'or') && !isLast) {
+            candidates.push([...current]);
+            current = [];
         }
     });
 
-    const nameClean = nameParts.map(p => p.cleanCore).join(' ');
+    if (current.length > 0) candidates.push(current);
+    return candidates;
+}
 
-    let nameTranscribed;
+function transcribeEntry(entry) {
+    const fullClean = entry.map(e => e.cleanCore).join(' ');
+    const fullOriginal = entry.map(e => e.core).join(' ');
 
-    if (nameClean && dictionary.has(nameClean)) {
-        nameTranscribed = dictionary.get(nameClean);
-    } else {
-        nameTranscribed = nameParts.map(p => {
-            const trans = dictionary.get(p.cleanCore) || p.core;
-            return p.punctBefore + trans + p.punctAfter;
-        }).join('');
+    // Step 4: Full match
+    if (dictionary.has(fullClean)) {
+        return attachPunct(entry, dictionary.get(fullClean));
     }
 
-    const combined = [...titleParts, nameTranscribed].join('');
-    result.push(combined);
+    // Step 5: Separate titles
+    let titleParts = [];
+    let nameParts = entry.filter(e => {
+        if (titles.has(e.cleanCore)) {
+            const tTrans = dictionary.get(e.cleanCore) || e.core;
+            titleParts.push(e.punctBefore + tTrans + e.punctAfter);
+            return false;
+        }
+        return true;
+    });
+
+    const nameClean = nameParts.map(n => n.cleanCore).join(' ');
+
+    if (nameClean && dictionary.has(nameClean)) {
+        return titleParts.join('') + attachPunct(nameParts, dictionary.get(nameClean));
+    }
+
+    // Step 6: Each word separately
+    const wordByWord = nameParts.map(n => {
+        const wClean = n.cleanCore;
+        const trans = dictionary.get(wClean) || n.core;
+        return n.punctBefore + trans + n.punctAfter;
+    }).join(' ');
+
+    if (wordByWord !== fullOriginal) return titleParts.join('') + wordByWord;
+
+    // Step 7: Split hyphenated words
+    const hyphenTypes = /[-–—]/; // all hyphen types
+    const hyphenSplit = nameParts.map(n => {
+        if (hyphenTypes.test(n.core)) {
+            const subWords = n.core.split(hyphenTypes).filter(w => w);
+            const subTrans = subWords.map(w => dictionary.get(w.toLowerCase()) || w).join('-');
+            return n.punctBefore + subTrans + n.punctAfter;
+        }
+        return n.punctBefore + n.core + n.punctAfter;
+    }).join(' ');
+
+    if (hyphenSplit !== fullOriginal) return titleParts.join('') + hyphenSplit;
+
+    // Step 8: All caps → acronym (e.g. CDC → סי-די-סי)
+    const isAllCaps = nameParts.every(n => /^[A-Z]+$/.test(n.core));
+    if (isAllCaps) {
+        const acronymTrans = nameParts.map(n => {
+            const lettersTrans = n.core.split('').map(l => letters.get(l.toLowerCase()) || l).join('-');
+            return n.punctBefore + lettersTrans + n.punctAfter;
+        }).join(' ');
+
+        if (acronymTrans !== fullOriginal) return titleParts.join('') + acronymTrans;
+    }
+
+    // Step 9: Leave as is
+    return titleParts.join('') + fullOriginal;
+}
+
+function attachPunct(entry, trans) {
+    const first = entry[0];
+    const last = entry[entry.length - 1];
+    return first.punctBefore + trans + last.punctAfter;
 }
 
 function copyToClipboard() {
