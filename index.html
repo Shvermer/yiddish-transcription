@@ -5,10 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>טראַנסקריפּציע צו אידיש</title>
     <link href="https://fonts.googleapis.com/css2?family=Taamey+Ashkenaz&display=swap" rel="stylesheet">
+    <script src="compromise.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 900px;
+            max-width: 100%;
+            width: 90vw;
             margin: 30px auto;
             padding: 20px;
             background: #f9f9f9;
@@ -25,16 +27,18 @@
             padding: 16px;
             border-radius: 8px;
             margin-bottom: 24px;
-            font-size: .9em;
+            font-size: 1.1em;
         }
         .container {
             display: flex;
             flex-direction: column;
             gap: 20px;
+            width: 100%;
         }
         textarea {
             width: 100%;
-            height: 180px;
+            height: 30vh;
+            min-height: 150px;
             padding: 12px;
             font-size: 17px;
             border: 1px solid #ccc;
@@ -42,12 +46,13 @@
             resize: vertical;
             font-family: inherit;
             text-align: right;
+            box-sizing: border-box;
         }
         .yiddish-output {
             direction: rtl;
             text-align: right;
-            font-family: "Noto Sans Hebrew", "David", Arial, sans-serif;
-            font-size: 1em;
+            font-family: "Noto Sans Hebrew", "Calibri", Arial, sans-serif;
+            font-size: 1.3em;
             background: #fff8e1;
         }
         button {
@@ -59,6 +64,8 @@
             border-radius: 6px;
             cursor: pointer;
             align-self: center;
+            width: auto;
+            min-width: 200px;
         }
         button:hover {
             background: #1e5c5d;
@@ -74,6 +81,19 @@
             font-weight: bold;
             min-height: 24px;
             color: #555;
+        }
+        @media (max-width: 600px) {
+            body {
+                padding: 10px;
+            }
+            textarea {
+                height: 25vh;
+                font-size: 15px;
+            }
+            button {
+                font-size: 16px;
+                padding: 10px 20px;
+            }
         }
     </style>
 </head>
