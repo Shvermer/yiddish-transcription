@@ -211,15 +211,40 @@ function transcribeEntry(entry) {
     if (hyphenSplit !== fullOriginal) return titleParts.join('') + hyphenSplit;
 
     // Step 8: All caps → acronym (e.g. CDC → סי-די-סי)
-    const isAllCaps = nameParts.every(n => /^[A-Z]+$/.test(n.core));
-    if (isAllCaps) {
+    const isAllCaps = nameParts.every(n => /^[A-Z\u0400-\u042F]+$/.test(n.core));
+// But skip if it's likely a valid Roman numeral
+if (isAllCaps) {
+    // Regex: only Roman letters allowed after stripping punctuation
+    const romanLettersOnly = /^[IVXLCDM]+$/i;
+
+    // Regex for valid Roman numeral structure (1–3999 range)
+    const romanPattern = /^(M{0,3})(CM|CD|D?C{0,3})(XC|XL|L?X{0,3})(IX|IV|V?I{0,3})$/i;
+
+    const hasRomanNumeral = nameParts.some(n => {
+        // Step 1: Strip ONLY punctuation (.,;:!?()–—"'` etc.)
+        const stripped = n.cleanCore.replace(/[\s.,;:!?()\-–—"'`‘’“”„«»‹›*…]+/g, '');
+
+        // Step 2: If after stripping there are ANY non-Roman letters → not Roman
+        if (!romanLettersOnly.test(stripped)) {
+            return false;
+        }
+
+        // Step 3: Only if pure Roman letters remain → check structure
+        return romanPattern.test(stripped);
+    });
+
+    if (!hasRomanNumeral) {
         const acronymTrans = nameParts.map(n => {
             const lettersTrans = n.core.split('').map(l => letters.get(l.toLowerCase()) || l).join('-');
             return n.punctBefore + lettersTrans + n.punctAfter;
         }).join(' ');
 
-        if (acronymTrans !== fullOriginal) return titleParts.join('') + acronymTrans;
+        if (acronymTrans !== fullOriginal) {
+            return titleParts.join('') + acronymTrans;
+        }
     }
+    // If any part is a valid Roman numeral → skip acronym, leave as is
+}
 
     // Step 9: Leave as is
     return titleParts.join('') + fullOriginal;
